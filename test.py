@@ -5,7 +5,7 @@ from requests import *
 conf.iface='Intel(R) Dual Band Wireless-AC 8260'
 
 list=[]
-dgalist = open('dga.txt','r')
+dgalist = open('test.txt','r')
 dgalist = (dgalist.readlines())[18:]
 for dga in dgalist :
 	list.append(dga.split('\t')[1])
