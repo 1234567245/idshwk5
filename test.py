@@ -1,64 +1,138 @@
-import time
-from scapy.all import *
-from requests import *
+from sklearn.ensemble import RandomForestClassifier
 
-conf.iface='Intel(R) Dual Band Wireless-AC 8260'
+import numpy as np
 
-list=[]
-dgalist = open('test.txt','r')
-dgalist = (dgalist.readlines())[18:]
-for dga in dgalist :
-	list.append(dga.split('\t')[1])
-data = set(list)
 
-#Capture and Filter DGA
-def capture(packet):
-	if packet:
-		i =0
-		for p in packet:
-			src = p[i][IP].src
-			dst = p[i][IP].dst
-			sport = p[i][UDP].sport
-			dport = p[i][UDP].dport
-			qr = str(p[i][DNS].qr)
-			rcode = str(p[i][DNS].rcode)
 
-			if '0' in qr:
-				qr = 'Query'
-				qname = p[i][DNS].qd.qname
-				if type(qname) == bytes:
-					qname = (qname.decode('utf-8'))[:-1]
-				if qname in data:
-					print("[*] Found DGA Request:-->",src,sport,qr,qname)
+domainlist = []
 
-			if '1' in qr:
-				if '0' in rcode:
-					for j in range(10):
-						try:
-							qr = 'Response'
-							rrname = p[j][DNS].an[j].rrname
-							rdata = p[j][DNS].an[j].rdata
-							if type(rrname) == bytes:
-								rrname = (rrname.decode('utf-8'))[:-1]
-								if type(rdata) == bytes:
-									rdata = (rdata.decode('utf-8'))[:-1]
-							if rrname in data:
-								print ("[*] Found DGA Response:-->",src,dst,qr,rrname,rdata,"\n")
-						except Exception as e:
-							pass
+class Domain:
 
-		i = i + 1
+	def __init__(self,_length,_num, _label):
+
+		self.domainName_length = _length
+
+		self.num_of_domainName = _num
+
+		self.label = _label
+
+
+
+	def returnData(self):
+
+		return [self.domainName_length, self.num_of_domainName]
+
+        
+
+	def returnLabel(self):
+
+		if self.label == "notdga":
+
+			return "notdga"
+
+		else:
+
+			return "dga"
+
+
+
 		
-#update dgafile
-def dgafileupdate():
-	url = 'http://data.netlab.360.com/feeds/dga/dga.txt'
-	dgafile = get(url)
-	with open('./dga.txt','w') as f:
-		f.write(dgafile.text)
-		print('Download DGAFile Finished')
+
+def initData(filename):
+
+	with open(filename) as f:
+
+		for line in f:
+
+			num_of_domainName = 0;
+
+			line = line.strip()
+
+			if line.startswith("#") or line =="":
+
+				continue
+
+			tokens = line.split(",")
+
+			domainName_length = len(tokens[0])
+
+			for i in tokens[0]:
+
+                        	if i.isdigit():
+
+                                	num_of_domainName += 1
+
+			label = tokens[1]
+
+			domainlist.append(Domain(domainName_length,num_of_domainName,label))
+
+
+
+#def runData(filename1,filename2,c):
+
+		
+
+def main():
+
+	initData("train.txt")
+
+	featureMatrix = []
+
+	labelList = []
+
+	for item in domainlist:
+
+		featureMatrix.append(item.returnData())
+
+		labelList.append(item.returnLabel())
+
+
+
+	clf = RandomForestClassifier(random_state=0)
+
+	clf.fit(featureMatrix,labelList)
+
+
+
+	#runData("test.txt","result.txt",clf)
+
+	with open("test.txt") as f1, open("result.txt", 'w') as f2:
+
+		for line in f1:
+
+			num = 0;
+
+			if line.startswith("#") or line =="":
+
+				continue
+
+			length = len(line)
+
+			for i in line:
+
+				if i.isdigit():
+
+					num += 1
+
+			line = line.replace("\n","")
+
+			line = line.replace("\r","")
+
+			f = str(clf.predict([[length,num]]))
+
+			f = f.replace("[","")
+
+			f = f.replace("]","")
+
+			f = f.replace("\'","")
+
+			output = line + "," + f + "\n"
+
+			f2.write(output)
+
+
 
 if __name__ == '__main__':
-	sniff(prn=capture,filter='udp port 53')
-	while True:
-		dgafileupdate()
-		time.sleep(86400)
+
+	main()
+
